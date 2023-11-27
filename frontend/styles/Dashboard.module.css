@@ -1,0 +1,28 @@
+.dashboard {
+    display: flex;
+    flex-direction: column;
+    border: 2px solid black;
+    border-radius: 8px;
+    height: 100vh;
+    width: 10rem;
+}
+
+.container {
+    display: flex;
+}
+
+.h1 {
+    padding: .5rem;
+    text-align: center;
+}
+
+.settings {
+    margin-top: auto;
+}
+
+.ul {
+    display: flex;
+    flex-direction: column;
+    list-style-type: none;
+    height: 100vh;
+}
