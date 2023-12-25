@@ -2,7 +2,7 @@ import { Args, Resolver, Query } from '@nestjs/graphql';
 import { DaoService } from './dao.service';
 import { DaoQuery } from './dtos/DaoQuery.dto';
 import { DaoResponse } from './dtos/DaoResponse.dto';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { DaoUser } from 'src/shared/entities/DaoUser.entity';
 
 @Resolver()
@@ -13,7 +13,13 @@ export class DaoResolver {
 
   @Query(() => DaoUser, { name: 'User' })
   async getUserData(@Args('publicAddress') publicAddress: string): Promise<DaoUser> {
-    return (await this.daoService.fetchUserFromDb(publicAddress.toLowerCase())).user;
+    const userData = await this.daoService.fetchUserFromDb(publicAddress.toLowerCase(), true);
+
+    if (!userData) {
+      throw new NotFoundException('User not found');
+    }
+
+    return userData.user;
   }
 
   @Query(() => DaoResponse, { name: 'delegatorsForDelegate' })
@@ -39,7 +45,7 @@ export class DaoResolver {
       throw new BadRequestException('Delegator address is required');
     }
 
-    return this.daoService.getDelegateesForDelegator(
+    return this.daoService.getDelegatesForDelegator(
       publicAddress.toLowerCase(),
       protocol ? protocol.toLowerCase() : this.defaultProtocol,
       refresh,

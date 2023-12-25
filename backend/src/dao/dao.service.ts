@@ -141,7 +141,7 @@ export class DaoService {
       return 0;
     }
     const collection = this.db.collection('daorelations');
-    const result = await collection.insertMany(data);
+    const result = await collection.insertMany(data, { ordered: false });
     console.log('Inserted documents =>', result.insertedCount);
     return result.insertedCount;
   }
@@ -163,7 +163,7 @@ export class DaoService {
     return await this.db.collection('daousers').deleteOne({ _id: _id });
   }
 
-  async fetchUserFromDb(publicAddress: string): Promise<{ user: DaoUser; newUser: boolean }> {
+  async fetchUserFromDb(publicAddress: string, noInsert?: boolean): Promise<{ user: DaoUser; newUser: boolean }> {
     publicAddress = publicAddress.toLowerCase();
     const collection = this.db.collection('daousers');
 
@@ -178,7 +178,11 @@ export class DaoService {
         createdAt: new Date().getTime(),
       };
 
-      await this.insertUserIntoDb(newUser);
+      if (!noInsert) {
+        await this.insertUserIntoDb(newUser).catch((err) => {
+          console.log(err.message);
+        });
+      }
 
       return { user: newUser, newUser: true };
     }
@@ -224,7 +228,7 @@ export class DaoService {
     };
   }
 
-  async getDelegateesForDelegator(delegatorAddress: string, protocol: string, refresh: boolean): Promise<DaoResponse> {
+  async getDelegatesForDelegator(delegatorAddress: string, protocol: string, refresh: boolean): Promise<DaoResponse> {
     const [userData, delegatorData] = await Promise.all([
       this.fetchUserFromDb(delegatorAddress),
       this.fetchDelegateesForDelegatorFromKarmaHq(delegatorAddress, protocol),
@@ -234,6 +238,7 @@ export class DaoService {
     let ensName = delegatorData.ensName;
 
     if (userData.newUser || refresh) {
+      console.log('fetching from karma hq');
       const delegateesFromKarmaHq = await this.fetchDelegateesForDelegatorFromKarmaHq(delegatorAddress, protocol);
 
       await this.insertDataIntoDb(delegateesFromKarmaHq.daoRelations);
