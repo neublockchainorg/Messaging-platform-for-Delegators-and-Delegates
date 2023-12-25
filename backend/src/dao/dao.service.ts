@@ -141,9 +141,14 @@ export class DaoService {
       return 0;
     }
     const collection = this.db.collection('daorelations');
-    const result = await collection.insertMany(data, { ordered: false });
-    console.log('Inserted documents =>', result.insertedCount);
-    return result.insertedCount;
+    try {
+      const result = await collection.insertMany(data, { ordered: false });
+      console.log('Inserted documents =>', result.insertedCount);
+      return result.insertedCount;
+    } catch (err) {
+      console.log(err.message);
+      return data.length - 1;
+    }
   }
 
   async insertUserIntoDb(data: DaoUser) {
