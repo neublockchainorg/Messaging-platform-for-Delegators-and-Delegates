@@ -1,0 +1,57 @@
+# ------------------------------------------------------
+# THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
+# ------------------------------------------------------
+
+"""
+A DAO Relation Model. This is when fetching the list for Delegate and Delegator.
+"""
+type DaoRelation {
+  """The delegate address"""
+  delegate: String!
+
+  """The delegator address"""
+  delegator: String!
+
+  """The protocol name"""
+  protocol: String!
+}
+
+"""A DAO Query Response Model. Gives the user and list of relations."""
+type DaoResponse {
+  """The list of relations"""
+  daoRelations: [DaoRelation!]
+
+  """The user"""
+  user: DaoUser!
+}
+
+"""A DAO User Model."""
+type DaoUser {
+  """The unix timestamp of when the user was created."""
+  createdAt: Float!
+
+  """Whether the user is a delegate."""
+  delegate: Boolean!
+
+  """Whether the user is a delegator."""
+  delegator: Boolean!
+
+  """The ens name of the user."""
+  ensName: String
+
+  """The crypto address of the user."""
+  publicAddress: String!
+}
+
+type Query {
+  delegatorsForDelegate(
+    """The delegate address"""
+    delegateAddress: String!
+
+    """The protocol name"""
+    protocol: String = "uniswap"
+
+    """Whether to refresh the data from KarmaHQ"""
+    refresh: Boolean = false
+  ): DaoResponse!
+}
