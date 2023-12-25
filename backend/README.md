@@ -21,3 +21,7 @@ $ npm run start
 # watch mode
 $ npm run start:dev
 ```
+
+## GraphQL - Playground
+
+http://localhost:4000/graphql
