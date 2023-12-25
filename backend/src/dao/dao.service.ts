@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Db } from 'mongodb';
+import { Db, ObjectId } from 'mongodb';
 import axios from 'axios';
 
 import { getDb } from 'src/config/dbconnection';
@@ -18,15 +18,27 @@ export class DaoService {
     this.db = getDb();
   }
 
+  getIndexForDaoRelation(delegator: string, delegate: string): string {
+    return `${delegator.toLowerCase()}_${delegate.toLowerCase()}`;
+  }
+
   async fetchDelegatorsForDelegateFromKarmaHq(
     delegateAddress: string,
-    protocol: string = 'uniswap',
+    protocol: string,
     pageSize: number = this.defaultPageSize,
     offset: number = 0,
   ): Promise<DaoRelation[]> {
-    const response = await axios.get(
-      `https://api.karmahq.xyz/api/dao/${protocol}/delegators/${delegateAddress}?pageSize=${pageSize}&offset=${offset}}`,
-    );
+    console.log(`pageSize: ${pageSize}, offset: ${offset}`);
+
+    const urlString = `https://api.karmahq.xyz/api/dao/${protocol}/delegators/${delegateAddress}?pageSize=${pageSize}&offset=${offset}`;
+
+    console.log(`urlString: ${urlString}`);
+
+    if (pageSize === 0) {
+      return [];
+    }
+
+    const response = await axios.get(urlString);
 
     const respData = response.data;
 
@@ -42,7 +54,8 @@ export class DaoService {
 
     let delegators = data.delegatorsBalance.map((delegator) => {
       return {
-        delegator: delegator.publicAddress,
+        index: this.getIndexForDaoRelation(delegator.publicAddress, delegateAddress),
+        delegator: delegator.publicAddress.toLowerCase(),
         delegate: delegateAddress,
         protocol: protocol,
       };
@@ -50,13 +63,16 @@ export class DaoService {
 
     const delegatorCount = data.delegatorCount;
 
-    if (delegatorCount > delegators.length * (offset + 1)) {
+    if (delegatorCount > pageSize * (offset + 1)) {
       const nextDelegators = await this.fetchDelegatorsForDelegateFromKarmaHq(
         delegateAddress,
         protocol,
         pageSize,
         offset + 1,
       );
+
+      console.log(`nextDelegators: ${nextDelegators.length}`);
+
       delegators = delegators.concat(nextDelegators);
     }
 
@@ -73,7 +89,57 @@ export class DaoService {
     return delegators;
   }
 
+  async fetchDelegateesForDelegatorFromKarmaHq(
+    delegatorAddress: string,
+    protocol: string,
+  ): Promise<{ ensName: string | null; daoRelations: DaoRelation[] }> {
+    const response = await axios.get(`https://api.karmahq.xyz/api/dao/${protocol}/tokenholders/${delegatorAddress}`);
+
+    const respData = response.data;
+
+    if (!respData.data) {
+      return { ensName: null, daoRelations: [] };
+    }
+
+    const data = respData.data.tokenholders as {
+      ensName: string;
+      delegatingHistories: {
+        toDelegate: string;
+        delegator: string;
+        id: string;
+      }[];
+    }[];
+
+    if (!data || data.length === 0) {
+      return { ensName: null, daoRelations: [] };
+    }
+
+    const ensName = data[0].ensName;
+    const delegatingHistories = data[0].delegatingHistories;
+
+    if (!delegatingHistories || delegatingHistories.length === 0) {
+      return { ensName: ensName, daoRelations: [] };
+    }
+
+    const daoRelations = delegatingHistories.map((delegatingHistory) => {
+      return {
+        index: this.getIndexForDaoRelation(delegatorAddress, delegatingHistory.toDelegate),
+        delegator: delegatorAddress,
+        delegate: delegatingHistory.toDelegate.toLowerCase(),
+        protocol: protocol,
+      };
+    });
+
+    return {
+      ensName: ensName,
+      daoRelations: daoRelations,
+    };
+  }
+
   async insertDataIntoDb(data: DaoRelation[]) {
+    if (data.length === 0) {
+      return 0;
+    }
     const collection = this.db.collection('daorelations');
     const result = await collection.insertMany(data);
     console.log('Inserted documents =>', result.insertedCount);
@@ -89,7 +155,12 @@ export class DaoService {
   }
 
   async updateUserDataInDb(data: DaoUser) {
+    delete data._id;
     return await this.db.collection('daousers').updateOne({ publicAddress: data.publicAddress }, { $set: data });
+  }
+
+  async deleteuserFromDb(_id: ObjectId) {
+    return await this.db.collection('daousers').deleteOne({ _id: _id });
   }
 
   async fetchUserFromDb(publicAddress: string): Promise<{ user: DaoUser; newUser: boolean }> {
@@ -125,13 +196,8 @@ export class DaoService {
 
     if (userData.newUser || refresh) {
       const count = delegators.length;
-      let pageSize = this.defaultPageSize;
-      let offset = 0;
-
-      if (count > this.defaultPageSize) {
-        pageSize = count;
-        offset = 1;
-      }
+      const pageSize = count > 0 ? count : this.defaultPageSize;
+      const offset = count > 0 ? 1 : 0;
 
       const delegatorsFromKarmaHq = await this.fetchDelegatorsForDelegateFromKarmaHq(
         delegateAddress,
@@ -148,11 +214,58 @@ export class DaoService {
     if (delegators.length > 0 && !userData.user.delegate) {
       userData.user.delegate = true;
       await this.updateUserDataInDb(userData.user);
+    } else if (delegators.length === 0 && !userData.user.delegator) {
+      await this.deleteuserFromDb(userData.user._id);
     }
 
     return {
       user: userData.user,
       daoRelations: delegators,
+    };
+  }
+
+  async getDelegateesForDelegator(delegatorAddress: string, protocol: string, refresh: boolean): Promise<DaoResponse> {
+    const [userData, delegatorData] = await Promise.all([
+      this.fetchUserFromDb(delegatorAddress),
+      this.fetchDelegateesForDelegatorFromKarmaHq(delegatorAddress, protocol),
+    ]);
+
+    let delegatees = delegatorData.daoRelations;
+    let ensName = delegatorData.ensName;
+
+    if (userData.newUser || refresh) {
+      const delegateesFromKarmaHq = await this.fetchDelegateesForDelegatorFromKarmaHq(delegatorAddress, protocol);
+
+      await this.insertDataIntoDb(delegateesFromKarmaHq.daoRelations);
+
+      delegatees = delegateesFromKarmaHq.daoRelations;
+      ensName = delegateesFromKarmaHq.ensName;
+    }
+
+    let doUpdate = false;
+
+    if (delegatees.length > 0 && !userData.user.delegator) {
+      userData.user.delegator = true;
+      doUpdate = true;
+    }
+
+    if (ensName && userData.user.ensName !== ensName) {
+      userData.user.ensName = ensName;
+      doUpdate = true;
+    }
+
+    if (doUpdate) {
+      await this.updateUserDataInDb(userData.user);
+    } else if (delegatees.length === 0 && !userData.user.delegate) {
+      await this.deleteuserFromDb(userData.user._id);
+    }
+
+    return {
+      user: {
+        ...userData.user,
+        ensName: ensName,
+      },
+      daoRelations: delegatees,
     };
   }
 }

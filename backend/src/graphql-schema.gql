@@ -44,12 +44,23 @@ type DaoUser {
 }
 
 type Query {
-  delegatorsForDelegate(
-    """The delegate address"""
-    delegateAddress: String!
-
+  User(publicAddress: String!): DaoUser!
+  delegatesForDelegator(
     """The protocol name"""
     protocol: String = "uniswap"
+
+    """The delegate or delegator address"""
+    publicAddress: String!
+
+    """Whether to refresh the data from KarmaHQ"""
+    refresh: Boolean = false
+  ): DaoResponse!
+  delegatorsForDelegate(
+    """The protocol name"""
+    protocol: String = "uniswap"
+
+    """The delegate or delegator address"""
+    publicAddress: String!
 
     """Whether to refresh the data from KarmaHQ"""
     refresh: Boolean = false
