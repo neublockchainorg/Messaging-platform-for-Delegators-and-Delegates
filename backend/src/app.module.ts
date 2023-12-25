@@ -6,6 +6,8 @@ import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
 import { join } from 'path';
 import { ConfigModule } from '@nestjs/config';
 import { DaoModule } from './dao/dao.module';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { GqlLoggingInterceptor } from './interceptor/logger.interceptor';
 
 @Module({
   imports: [
@@ -20,6 +22,12 @@ import { DaoModule } from './dao/dao.module';
     DaoModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: GqlLoggingInterceptor,
+    },
+    AppService,
+  ],
 })
 export class AppModule {}
