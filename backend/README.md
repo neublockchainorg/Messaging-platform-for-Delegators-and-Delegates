@@ -25,3 +25,5 @@ $ npm run start:dev
 ## GraphQL - Playground
 
 http://localhost:4000/graphql
+
+![GraphQL Playground screenshot](graphQL-test.png)
