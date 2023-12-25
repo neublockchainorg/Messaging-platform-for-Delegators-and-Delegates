@@ -4,7 +4,7 @@
 
 ## Description
 
-The Backend for DAO Messaging Platform. This server scrapes data [karmahq.xyz](https://www.karmahq.xyz/). In Development ...!
+The Backend for DAO Messaging Platform. This server scrapes data [karmahq.xyz](https://www.karmahq.xyz/).
 
 ## Installation
 
